@@ -1,0 +1,36 @@
+{
+  "name": "Aivora.ai - AI Chat App",
+  "short_name": "Aivora.ai",
+  "description": "AI Chat App with Character Creation - Create unique AI personalities and have meaningful conversations",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#18181b",
+  "theme_color": "#4f46e5",
+  "orientation": "portrait",
+  "scope": "/",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "categories": ["productivity", "social"],
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/ai-assistant-avatar.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/ai-assistant-avatar.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/ai-assistant-avatar.png",
+      "sizes": "540x720",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ]
+}
