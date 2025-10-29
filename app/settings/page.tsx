@@ -47,10 +47,15 @@ export default function SettingsPage() {
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>({
     granted: false,
     denied: false,
-    default: false, // Added missing 'default' property required by NotificationPermission type
+    default: false,
   })
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
+    setMounted(true)
+
+    if (typeof window === "undefined") return
+
     const savedPersonality = localStorage.getItem("ai-personality") || "assistant"
     const savedFilter = localStorage.getItem("content-filter") !== "false"
     const savedUnhingedMode = localStorage.getItem("unhinged-mode") === "true"
