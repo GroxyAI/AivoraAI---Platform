@@ -13,13 +13,13 @@
   "lang": "en",
   "icons": [
     {
-      "src": "/ai-assistant-avatar.png",
+      "src": "/aivora-logo.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/ai-assistant-avatar.png",
+      "src": "/aivora-logo.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
@@ -27,7 +27,7 @@
   ],
   "screenshots": [
     {
-      "src": "/ai-assistant-avatar.png",
+      "src": "/aivora-logo.png",
       "sizes": "540x720",
       "type": "image/png",
       "form_factor": "narrow"

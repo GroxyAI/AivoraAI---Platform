@@ -99,6 +99,51 @@ export const CONTENT_CATEGORIES = {
 } as const
 
 export const analyzeContent = (content: string): ContentWarning => {
+  const unhingedMode = typeof window !== "undefined" && localStorage.getItem("unhinged-mode") === "true"
+  const ukUser = typeof window !== "undefined" && localStorage.getItem("uk-user") === "true"
+  const heaaVerified = typeof window !== "undefined" && localStorage.getItem("heaa-verified") === "true"
+
+  // UK users without HEAA verification get stricter filtering
+  if (ukUser && !heaaVerified && !localStorage.getItem("dev-account")) {
+    const lowerContent = content.toLowerCase()
+
+    // Block primary priority content for unverified UK users
+    const primaryPriorityKeywords = [
+      "suicide",
+      "self harm",
+      "self-harm",
+      "kill myself",
+      "end my life",
+      "eating disorder",
+      "anorexia",
+      "bulimia",
+      "purging",
+      "pornography",
+      "explicit sexual",
+      "graphic sexual",
+    ]
+
+    const hasPrimaryPriority = primaryPriorityKeywords.some((keyword) => lowerContent.includes(keyword))
+
+    if (hasPrimaryPriority) {
+      return {
+        level: "blocked",
+        categories: ["Primary Priority Content"],
+        message: "This content is restricted for UK users under 18. Age verification required.",
+        showWarning: true,
+      }
+    }
+  }
+
+  if (unhingedMode && (!ukUser || heaaVerified || localStorage.getItem("dev-account"))) {
+    return {
+      level: "low",
+      categories: [],
+      message: "",
+      showWarning: false,
+    }
+  }
+
   const lowerContent = content.toLowerCase()
   const detectedCategories: string[] = []
   let highestLevel: "low" | "medium" | "high" | "blocked" = "low"
@@ -117,10 +162,7 @@ export const analyzeContent = (content: string): ContentWarning => {
         highestLevel = category.level
       }
 
-      // Show warning for medium and above
-      if (category.level !== "low") {
-        showWarning = true
-      }
+      showWarning = true
     }
   })
 
@@ -161,5 +203,41 @@ export const getFilterColor = (level: "low" | "medium" | "high" | "blocked"): st
 }
 
 export const shouldBlockMessage = (level: "low" | "medium" | "high" | "blocked"): boolean => {
-  return level === "blocked"
+  const unhingedMode = typeof window !== "undefined" && localStorage.getItem("unhinged-mode") === "true"
+  const ukUser = typeof window !== "undefined" && localStorage.getItem("uk-user") === "true"
+  const heaaVerified = typeof window !== "undefined" && localStorage.getItem("heaa-verified") === "true"
+
+  // UK users without HEAA verification have stricter blocking
+  if (ukUser && !heaaVerified && !localStorage.getItem("dev-account")) {
+    return level === "blocked" || level === "high"
+  }
+
+  if (unhingedMode && (!ukUser || heaaVerified || localStorage.getItem("dev-account"))) {
+    return false
+  }
+
+  return level === "blocked" || level === "high" || level === "medium"
+}
+
+export const isUkCompliant = (): boolean => {
+  if (typeof window === "undefined") return true
+
+  const ukUser = localStorage.getItem("uk-user") === "true"
+  const heaaVerified = localStorage.getItem("heaa-verified") === "true"
+  const devAccount = localStorage.getItem("dev-account") === "true"
+
+  return !ukUser || heaaVerified || devAccount
+}
+
+export const getComplianceMessage = (): string => {
+  if (typeof window === "undefined") return ""
+
+  const ukUser = localStorage.getItem("uk-user") === "true"
+  const heaaVerified = localStorage.getItem("heaa-verified") === "true"
+
+  if (ukUser && !heaaVerified) {
+    return "UK users require age verification to access all features under the Online Safety Act 2023."
+  }
+
+  return ""
 }

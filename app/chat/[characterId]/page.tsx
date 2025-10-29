@@ -2,8 +2,8 @@
 import { Button } from "@/components/ui/button"
 import type React from "react"
 import { Input } from "@/components/ui/input"
-import { Maximize2, Plus, Mic, ArrowUp, AlertTriangle, ArrowLeft } from "lucide-react"
-import { useState, useEffect } from "react"
+import { Maximize2, Mic, ArrowUp, AlertTriangle, ArrowLeft } from "lucide-react"
+import { useState, useEffect, use } from "react"
 import { AppLayout } from "@/components/app-layout"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useRouter } from "next/navigation"
@@ -20,16 +20,30 @@ import {
   type Message,
   type Character,
 } from "@/lib/storage"
-import { analyzeContent, getFilterColor, shouldBlockMessage, type ContentWarning } from "@/lib/content-filter"
+import { analyzeContent, shouldBlockMessage, type ContentWarning } from "@/lib/content-filter"
 import { formatText } from "@/lib/text-formatter"
+import { FileUploadButton } from "@/components/file-upload-button"
+import { MessageAttachment } from "@/components/message-attachment"
+import type { FileUploadResult } from "@/lib/file-upload"
 
 interface CharacterChatPageProps {
-  params: {
+  params: Promise<{
     characterId: string
+  }>
+}
+
+interface ExtendedMessage extends Message {
+  attachment?: {
+    fileType: string
+    fileName: string
+    displayUrl: string
+    base64Data: string
   }
 }
 
 export default function CharacterChatPage({ params }: CharacterChatPageProps) {
+  const { characterId } = use(params)
+
   const router = useRouter()
   const [currentChat, setCurrentChat] = useState<ChatSession | null>(null)
   const [character, setCharacter] = useState<Character | null>(null)
@@ -39,10 +53,11 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
   const [contentFilter, setContentFilter] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isRetrying, setIsRetrying] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<FileUploadResult | null>(null)
 
   useEffect(() => {
     const characters = getCharacters()
-    const foundCharacter = characters.find((c) => c.id === params.characterId)
+    const foundCharacter = characters.find((c) => c.id === characterId)
 
     if (!foundCharacter) {
       router.push("/characters")
@@ -51,21 +66,21 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
 
     setCharacter(foundCharacter)
 
-    const savedChat = getCharacterChatSession(params.characterId)
+    const savedChat = getCharacterChatSession(characterId)
     const profile = getUserProfile()
     const savedFilter = localStorage.getItem("content-filter") !== "false"
 
     if (savedChat) {
       setCurrentChat(savedChat)
     } else {
-      const newChat = createNewCharacterChatSession(params.characterId)
+      const newChat = createNewCharacterChatSession(characterId)
       setCurrentChat(newChat)
       saveCharacterChatSession(newChat)
     }
 
     setUserProfile(profile)
     setContentFilter(savedFilter)
-  }, [params.characterId, router])
+  }, [characterId, router])
 
   const CrisisInfo = () => (
     <div className="bg-red-900/20 border border-red-500 rounded-lg p-4 mb-4">
@@ -144,7 +159,7 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
   const startNewChat = () => {
     if (!character) return
 
-    const newChat = createNewCharacterChatSession(params.characterId)
+    const newChat = createNewCharacterChatSession(characterId)
     setCurrentChat(newChat)
     saveCharacterChatSession(newChat)
     setError(null)
@@ -323,7 +338,7 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim() || isLoading || !currentChat || !character) return
+    if ((!input.trim() && !selectedFile) || isLoading || !currentChat || !character) return
 
     const trimmedInput = input.trim()
 
@@ -388,11 +403,19 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
       return
     }
 
-    const userMessage: Message = {
+    const userMessage: ExtendedMessage = {
       id: Date.now().toString(),
       role: "user",
-      content: trimmedInput,
+      content: trimmedInput || "[Image/File attached]",
       timestamp: Date.now(),
+      ...(selectedFile && {
+        attachment: {
+          fileType: selectedFile.fileType,
+          fileName: selectedFile.fileName,
+          displayUrl: selectedFile.displayUrl,
+          base64Data: selectedFile.base64Data,
+        },
+      }),
     }
 
     const updatedChat = {
@@ -404,9 +427,14 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
 
     setCurrentChat(updatedChat)
     setInput("")
+    setSelectedFile(null)
     setIsLoading(true)
 
-    await sendMessageToAPI(updatedChat, trimmedInput)
+    const messageContent = selectedFile
+      ? `${trimmedInput}\n\n[User attached an image/file: ${selectedFile.fileName}. Base64 data: ${selectedFile.base64Data.substring(0, 100)}...]`
+      : trimmedInput
+
+    await sendMessageToAPI(updatedChat, messageContent)
     setIsLoading(false)
   }
 
@@ -531,19 +559,7 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
           ) : (
             <div className="flex-1 overflow-y-auto py-4 space-y-4 max-w-3xl mx-auto w-full">
               {messages.map((message) => {
-                if (message.role === "system") {
-                  if (message.content === "crisis_info") {
-                    return <CrisisInfo key={message.id} />
-                  }
-                  if (message.content === "filter_demo") {
-                    return <FilterDemo key={message.id} />
-                  }
-                  return null
-                }
-
-                const contentAnalysis = contentFilter
-                  ? analyzeMessageContent(message.content)
-                  : { showWarning: false, level: "low" as const, categories: [], message: "" }
+                const extendedMessage = message as ExtendedMessage
 
                 return (
                   <div
@@ -559,39 +575,31 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
                       </Avatar>
                     )}
                     <div className="relative">
-                      {contentAnalysis.showWarning && (
-                        <>
-                          <div className="absolute -top-2 -right-2 z-10">
-                            <AlertTriangle className={`h-4 w-4 text-${getFilterColor(contentAnalysis.level)}-500`} />
-                          </div>
-                          {contentAnalysis.level === "high" || contentAnalysis.level === "blocked" ? (
-                            <div className="absolute -bottom-8 left-0 right-0 z-10">
-                              <div
-                                className={`text-xs text-${getFilterColor(contentAnalysis.level)}-400 bg-zinc-900 px-2 py-1 rounded`}
-                              >
-                                {contentAnalysis.categories.join(", ")} detected
-                              </div>
-                            </div>
-                          ) : null}
-                        </>
-                      )}
                       <div
                         className={`max-w-[80%] rounded-2xl px-4 py-3 ${
                           message.role === "user" ? "bg-indigo-600 text-white" : "bg-zinc-800 text-white"
-                        } ${
-                          contentAnalysis.showWarning
-                            ? `ring-2 ring-${getFilterColor(contentAnalysis.level)}-500/50`
-                            : ""
-                        } ${contentAnalysis.level === "blocked" ? "opacity-75" : ""}`}
+                        }`}
                       >
-                        <div className={`whitespace-pre-wrap ${contentAnalysis.level === "blocked" ? "blur-sm" : ""}`}>
-                          {formatText(message.content)}
-                        </div>
+                        <div className="whitespace-pre-wrap">{formatText(message.content)}</div>
+                        {extendedMessage.attachment && (
+                          <MessageAttachment
+                            fileType={extendedMessage.attachment.fileType}
+                            fileName={extendedMessage.attachment.fileName}
+                            displayUrl={extendedMessage.attachment.displayUrl}
+                          />
+                        )}
+                        {message.role === "assistant" && (
+                          <div className="mt-2 pt-2 border-t border-zinc-700/50 flex justify-end">
+                            <span className="text-xs bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent font-medium">
+                              A.ai
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                     {message.role === "user" && (
                       <Avatar className="h-8 w-8 mt-1">
-                        <AvatarImage src={userProfile?.profilePicture || "/placeholder.svg"} />
+                        <AvatarImage src={userProfile?.profilePicture || "/aivora-mascot.png"} />
                         <AvatarFallback className="bg-zinc-600 text-white text-sm">
                           {userProfile?.username ? userProfile.username[0].toUpperCase() : "U"}
                         </AvatarFallback>
@@ -647,14 +655,12 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
         <div className="p-4 pb-8">
           <div className="max-w-3xl mx-auto relative">
             <form onSubmit={handleSubmit} className="flex items-center bg-zinc-800 rounded-full px-4 py-3 gap-3">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-full"
-              >
-                <Plus className="h-5 w-5" />
-              </Button>
+              <FileUploadButton
+                onFileSelect={setSelectedFile}
+                onFileRemove={() => setSelectedFile(null)}
+                selectedFile={selectedFile}
+                disabled={isLoading}
+              />
 
               <Input
                 value={input}
@@ -675,7 +681,7 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
 
               <Button
                 type="submit"
-                disabled={!input.trim() || isLoading}
+                disabled={(!input.trim() && !selectedFile) || isLoading}
                 size="icon"
                 className="bg-zinc-600 hover:bg-zinc-500 disabled:bg-zinc-700 disabled:text-zinc-500 rounded-full"
               >
