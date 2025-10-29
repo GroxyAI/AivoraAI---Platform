@@ -1,5 +1,5 @@
 import type React from "react"
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
 import "./globals.css"
@@ -9,8 +9,6 @@ export const metadata: Metadata = {
   title: "Aivora.ai - AI Chat App",
   description: "AI Chat App with Character Creation and Token System",
   manifest: "/manifest.json",
-  themeColor: "#4f46e5",
-  viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
   icons: {
     icon: "/aivora-logo.png",
     apple: "/aivora-logo.png",
@@ -21,6 +19,14 @@ export const metadata: Metadata = {
     images: ["/aivora-logo.png"],
   },
     generator: 'v0.app'
+}
+
+export const viewport: Viewport = {
+  themeColor: "#4f46e5",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 }
 
 export default function RootLayout({
