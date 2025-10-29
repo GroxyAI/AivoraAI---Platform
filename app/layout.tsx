@@ -11,6 +11,15 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   themeColor: "#4f46e5",
   viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
+  icons: {
+    icon: "/aivora-logo.png",
+    apple: "/aivora-logo.png",
+  },
+  openGraph: {
+    title: "Aivora.ai - AI Chat App",
+    description: "AI Chat App with Character Creation and Token System",
+    images: ["/aivora-logo.png"],
+  },
     generator: 'v0.app'
 }
 

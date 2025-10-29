@@ -9,12 +9,7 @@ export default function LandingPage() {
       {/* Header */}
       <header className="flex items-center justify-between p-6">
         <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="w-10 h-10 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-lg">A</span>
-            </div>
-            <div className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-br from-pink-400 to-indigo-400 rounded-full opacity-80"></div>
-          </div>
+          <img src="/aivora-logo.png" alt="Aivora.ai Logo" className="w-10 h-10 rounded-lg" />
           <span className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
             Aivora.ai
           </span>

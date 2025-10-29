@@ -10,6 +10,7 @@ export interface UserProfile {
   isPlatinum: boolean
   usageDays: number
   lastActiveDate: string
+  isDevProfile?: boolean
 }
 
 export interface Character {
@@ -42,6 +43,7 @@ const STORAGE_KEYS = {
   CHAT_SESSIONS: "chatSessions",
   CURRENT_CHAT: "currentChat",
   TOKEN_HISTORY: "tokenHistory",
+  DEV_ACCOUNT: "dev-account", // Added for dev account management
 } as const
 
 // User Profile Management
@@ -63,7 +65,7 @@ export const initializeUserProfile = (): UserProfile => {
   return {
     username: "",
     bio: "",
-    profilePicture: "",
+    profilePicture: "/aivora-mascot.png", // Updated to use local AivoraAI mascot as default profile picture
     storageType: "local",
     tokens: 0,
     preferredModel: "basic",
@@ -95,7 +97,7 @@ export const updateUserActivity = (): void => {
 
 export const isPlatinumMember = (): boolean => {
   const profile = getUserProfile()
-  return profile?.isPlatinum || false
+  return profile?.isPlatinum || isDevAccount() || false
 }
 
 export const getDaysUntilPlatinum = (): number => {
@@ -292,8 +294,8 @@ export const addTokens = (amount: number): void => {
 }
 
 export const deductTokens = (amount: number): boolean => {
-  // Platinum members get free access to all models
-  if (isPlatinumMember()) {
+  // Platinum members and dev accounts get free access to all models
+  if (isPlatinumMember() || isDevAccount()) {
     return true
   }
 
@@ -321,4 +323,36 @@ export const setPreferredModel = (model: "basic" | "advanced" | "premium"): void
 
 export const awardChatTokens = (): void => {
   addTokens(10) // Award 10 tokens per chat
+}
+
+// Developer account management functions
+export const isDevAccount = (): boolean => {
+  if (typeof window === "undefined") return false
+  return localStorage.getItem(STORAGE_KEYS.DEV_ACCOUNT) === "true"
+}
+
+export const setDevAccount = (isDev: boolean): void => {
+  if (typeof window === "undefined") return
+  if (isDev) {
+    localStorage.setItem(STORAGE_KEYS.DEV_ACCOUNT, "true")
+    // Auto-enable developer privileges
+    localStorage.setItem("age-verified", "true")
+    localStorage.setItem("unhinged-mode", "true")
+    localStorage.setItem("content-filter", "false")
+
+    const profile = getUserProfile() || initializeUserProfile()
+    profile.username = "@devadmin"
+    profile.bio = "Official AivoraAI Developer Account"
+    profile.profilePicture = "/aivora-mascot.png" // Updated to use local AivoraAI mascot as default profile picture
+    profile.isDevProfile = true
+    profile.isPlatinum = true
+    profile.tokens = 999999
+    saveUserProfile(profile)
+  } else {
+    localStorage.removeItem(STORAGE_KEYS.DEV_ACCOUNT)
+  }
+}
+
+export const getDefaultProfilePicture = (): string => {
+  return "/aivora-mascot.png" // Updated to use local AivoraAI mascot as default profile picture
 }
