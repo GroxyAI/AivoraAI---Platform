@@ -51,6 +51,138 @@ export default function SettingsPage() {
   })
   const [mounted, setMounted] = useState(false)
 
+  // Helper functions for ID verification camera
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true })
+      setCameraStream(stream)
+    } catch (error) {
+      console.error("Error accessing camera:", error)
+    }
+  }
+
+  const captureImage = () => {
+    if (cameraStream) {
+      const video = document.getElementById("camera-video") as HTMLVideoElement
+      const canvas = document.createElement("canvas")
+      canvas.width = video.videoWidth
+      canvas.height = video.videoHeight
+      canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height)
+      const dataUrl = canvas.toDataURL("image/png")
+      setCapturedImage(dataUrl)
+      stopCamera()
+    }
+  }
+
+  const retakePhoto = () => {
+    setCapturedImage(null)
+    setIsCapturing(false)
+    setCameraStream(null)
+  }
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop())
+      setCameraStream(null)
+    }
+  }
+
+  const closeIdVerification = () => {
+    setShowIdVerification(false)
+    stopCamera()
+  }
+
+  const verifyId = () => {
+    // TODO: Implement actual ID verification logic
+    setHeaaVerified(true)
+    setShowIdVerification(false)
+    alert("ID verification successful! (Placeholder)")
+  }
+
+  const handleAgeVerification = (isAdult: boolean) => {
+    if (isAdult) {
+      setShowIdVerification(true)
+      setShowAgeVerification(false)
+    } else {
+      setShowAgeVerification(false)
+    }
+  }
+
+  const handleUkCompliance = (isUK: boolean) => {
+    setUkUser(isUK)
+    if (isUK) {
+      setShowUkCompliance(false)
+      setShowIdVerification(true) // Prompt for ID verification for UK users
+    } else {
+      setShowUkCompliance(false)
+    }
+  }
+
+  const handleReportContent = () => {
+    // TODO: Implement report submission logic
+    alert("Report submitted successfully! (Placeholder)")
+    setShowReportModal(false)
+    setReportContent("")
+    setReportReason("")
+  }
+
+  const handlePersonalityChange = (personality: string) => {
+    setAiPersonality(personality)
+    localStorage.setItem("ai-personality", personality)
+  }
+
+  const handleUnhingedModeChange = (checked: boolean) => {
+    if (ukUser && !heaaVerified && !localStorage.getItem("dev-account")) {
+      alert("Please verify your ID to enable Unhinged Mode as a UK user.")
+      return
+    }
+    setUnhingedMode(checked)
+    localStorage.setItem("unhinged-mode", checked.toString())
+  }
+
+  const handleFilterChange = (checked: boolean) => {
+    setContentFilter(checked)
+    localStorage.setItem("content-filter", checked.toString())
+  }
+
+  const handlePushNotificationChange = (checked: boolean) => {
+    setPushNotifications(checked)
+    localStorage.setItem("push-notifications", checked.toString())
+    if (checked && !notificationPermission.granted) {
+      notificationService.requestPermission().then((status) => {
+        setNotificationPermission(status)
+      })
+    }
+  }
+
+  const handleSoundEffectsChange = (checked: boolean) => {
+    setSoundEffects(checked)
+    localStorage.setItem("sound-effects", checked.toString())
+  }
+
+  const handleModelChange = (model: "basic" | "advanced" | "premium") => {
+    if (isPlatinum) {
+      setPreferredModelState(model)
+      setPreferredModel(model)
+      return
+    }
+
+    if (model === "basic") {
+      setPreferredModelState(model)
+      setPreferredModel(model)
+    } else if (model === "advanced" && tokens >= 50) {
+      setPreferredModelState(model)
+      setPreferredModel(model)
+      setTokens(tokens - 50)
+    } else if (model === "premium" && tokens >= 100) {
+      setPreferredModelState(model)
+      setPreferredModel(model)
+      setTokens(tokens - 100)
+    } else {
+      alert(`You need ${model === "advanced" ? 50 : 100} tokens to unlock this model. Keep chatting to earn more!`)
+    }
+  }
+
   useEffect(() => {
     setMounted(true)
 
@@ -90,185 +222,26 @@ export default function SettingsPage() {
     if (savedUkUser && !savedHeaaVerified && !localStorage.getItem("dev-account")) {
       setShowUkCompliance(true)
     }
+    // Show age verification if unhinged mode is enabled but not verified
+    if (savedUnhingedMode && !savedAgeVerified && !localStorage.getItem("dev-account")) {
+      setShowAgeVerification(true)
+    }
   }, [])
 
-  const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "environment",
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      })
-      setCameraStream(stream)
-    } catch (error) {
-      console.error("Camera access denied:", error)
-      alert("Camera access is required for ID verification. Please allow camera access and try again.")
-    }
-  }
-
-  const captureImage = () => {
-    if (!cameraStream) return
-
-    const video = document.getElementById("camera-video") as HTMLVideoElement
-    const canvas = document.createElement("canvas")
-    const context = canvas.getContext("2d")
-
-    if (video && context) {
-      canvas.width = video.videoWidth
-      canvas.height = video.videoHeight
-      context.drawImage(video, 0, 0)
-
-      const imageData = canvas.toDataURL("image/jpeg", 0.8)
-      setCapturedImage(imageData)
-      setIsCapturing(false)
-
-      // Stop camera stream
-      cameraStream.getTracks().forEach((track) => track.stop())
-      setCameraStream(null)
-    }
-  }
-
-  const retakePhoto = () => {
-    setCapturedImage(null)
-    setIsCapturing(true)
-    startCamera()
-  }
-
-  const verifyId = () => {
-    if (capturedImage) {
-      // In a real app, this would send the image to a verification service
-      setAgeVerified(true)
-      setUnhingedMode(true)
-      localStorage.setItem("age-verified", "true")
-      localStorage.setItem("unhinged-mode", "true")
-      localStorage.setItem("content-filter", "false")
-      setContentFilter(false)
-      setShowIdVerification(false)
-      setCapturedImage(null)
-
-      alert("ID verification successful! Unhinged mode has been enabled.")
-    }
-  }
-
-  const closeIdVerification = () => {
-    if (cameraStream) {
-      cameraStream.getTracks().forEach((track) => track.stop())
-      setCameraStream(null)
-    }
-    setShowIdVerification(false)
-    setShowAgeVerification(false)
-    setCapturedImage(null)
-    setIsCapturing(false)
-  }
-
-  const handlePersonalityChange = (personality: string) => {
-    setAiPersonality(personality)
-    localStorage.setItem("ai-personality", personality)
-  }
-
-  const handleFilterChange = (enabled: boolean) => {
-    setContentFilter(enabled)
-    localStorage.setItem("content-filter", enabled.toString())
-  }
-
-  const handlePushNotificationChange = async (enabled: boolean) => {
-    if (enabled) {
-      const permission = await notificationService.requestPermission()
-      setNotificationPermission(permission)
-
-      if (permission.granted) {
-        setPushNotifications(true)
-        localStorage.setItem("push-notifications", "true")
-
-        await notificationService.showNotification("Notifications Enabled!", {
-          body: "You'll now receive notifications for new messages and character responses.",
-          tag: "notification-enabled",
-        })
-      } else {
-        setPushNotifications(false)
-        localStorage.setItem("push-notifications", "false")
-      }
-    } else {
-      setPushNotifications(false)
-      localStorage.setItem("push-notifications", "false")
-    }
-  }
-
-  const handleSoundEffectsChange = (enabled: boolean) => {
-    setSoundEffects(enabled)
-    localStorage.setItem("sound-effects", enabled.toString())
-  }
-
-  const handleModelChange = (model: "basic" | "advanced" | "premium") => {
-    const modelCosts = { basic: 0, advanced: 50, premium: 100 }
-    const cost = modelCosts[model]
-
-    if (!isPlatinum && cost > tokens) {
-      alert(
-        `You need ${cost} tokens to use the ${model} model. You have ${tokens} tokens. Chat with characters to earn more, or use our service for 2 years to get Platinum!`,
-      )
-      return
-    }
-
-    setPreferredModel(model)
-    setPreferredModelState(model)
-  }
-
-  const handleAgeVerification = (isOver18: boolean) => {
-    if (isOver18) {
-      setShowAgeVerification(false)
-      setShowIdVerification(true)
-      setIsCapturing(true)
-      startCamera()
-    } else {
-      setShowAgeVerification(false)
-    }
-  }
-
-  const handleUnhingedModeChange = (enabled: boolean) => {
-    if (enabled && !ageVerified && !localStorage.getItem("dev-account")) {
-      setShowAgeVerification(true)
-      return
-    }
-
-    setUnhingedMode(enabled)
-    localStorage.setItem("unhinged-mode", enabled.toString())
-  }
-
-  const handleUkCompliance = (isUkUser: boolean) => {
-    setUkUser(isUkUser)
-    localStorage.setItem("uk-user", isUkUser.toString())
-
-    if (isUkUser) {
-      setShowUkCompliance(false)
-      setShowIdVerification(true)
-      setIsCapturing(true)
-      startCamera()
-    } else {
-      setShowUkCompliance(false)
-    }
-  }
-
-  const handleReportContent = () => {
-    if (reportContent.trim() && reportReason.trim()) {
-      // Store report for review (in real app, would send to moderation team)
-      const reports = JSON.parse(localStorage.getItem("content-reports") || "[]")
-      reports.push({
-        id: Date.now(),
-        content: reportContent,
-        reason: reportReason,
-        timestamp: new Date().toISOString(),
-        status: "pending",
-      })
-      localStorage.setItem("content-reports", JSON.stringify(reports))
-
-      setShowReportModal(false)
-      setReportContent("")
-      setReportReason("")
-      alert("Thank you for your report. Our moderation team will review it within 24 hours.")
-    }
+  if (!mounted) {
+    return (
+      <AppLayout>
+        <div className="min-h-screen bg-zinc-900 text-white p-4 pb-20">
+          <div className="max-w-2xl mx-auto">
+            <div className="flex items-center gap-3 mb-6">
+              <Settings className="h-8 w-8 text-indigo-400" />
+              <h1 className="text-3xl font-bold">Settings</h1>
+            </div>
+            <div className="text-center text-zinc-400">Loading settings...</div>
+          </div>
+        </div>
+      </AppLayout>
+    )
   }
 
   return (
