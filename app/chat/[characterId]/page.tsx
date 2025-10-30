@@ -58,6 +58,7 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
   const [selectedFile, setSelectedFile] = useState<FileUploadResult | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isInitializing, setIsInitializing] = useState(true)
+  const [characterNotFound, setCharacterNotFound] = useState(false)
 
   useEffect(() => {
     const initializeChat = async () => {
@@ -85,7 +86,7 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
         }
 
         if (!foundCharacter) {
-          router.push("/characters")
+          setCharacterNotFound(true)
           return
         }
 
@@ -111,7 +112,13 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
     }
 
     initializeChat()
-  }, [characterId, router])
+  }, [characterId])
+
+  useEffect(() => {
+    if (characterNotFound && !isInitializing) {
+      router.push("/characters")
+    }
+  }, [characterNotFound, isInitializing, router])
 
   const CrisisInfo = () => (
     <div className="bg-red-900/20 border border-red-500 rounded-lg p-4 mb-4">

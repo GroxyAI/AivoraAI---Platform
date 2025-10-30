@@ -6,6 +6,9 @@ import { useState, useEffect } from "react"
 import { BottomNavigation } from "./bottom-navigation"
 import { PinEntry } from "./pin-entry"
 import { PinSetupWizard } from "./pin-setup-wizard"
+import { ChatSidebar } from "./chat-sidebar"
+import { Menu } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -17,13 +20,13 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [showSetupWizard, setShowSetupWizard] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
     const checkPinStatus = () => {
       const savedProfile = localStorage.getItem("userProfile")
 
       if (!savedProfile) {
-        // No profile exists, show setup wizard
         setShowSetupWizard(true)
         setIsLoading(false)
         return
@@ -32,13 +35,11 @@ export function AppLayout({ children }: AppLayoutProps) {
       const profile = JSON.parse(savedProfile)
 
       if (!profile.pinEnabled) {
-        // PIN not enabled, allow access
         setIsAuthenticated(true)
         setIsLoading(false)
         return
       }
 
-      // PIN is enabled, check if already authenticated in this session
       const sessionAuth = sessionStorage.getItem("pinAuthenticated")
       if (sessionAuth === "true") {
         setIsAuthenticated(true)
@@ -112,9 +113,25 @@ export function AppLayout({ children }: AppLayoutProps) {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-900">
-      {children}
-      <BottomNavigation activeTab={getActiveTab()} onTabChange={handleTabChange} />
+    <div className="min-h-screen bg-zinc-900 flex">
+      <ChatSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+      <div className="flex-1 flex flex-col">
+        {/* Mobile menu button */}
+        <div className="md:hidden flex items-center p-4 border-b border-zinc-800">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="text-white hover:bg-zinc-800"
+          >
+            <Menu className="h-6 w-6" />
+          </Button>
+        </div>
+
+        {children}
+        <BottomNavigation activeTab={getActiveTab()} onTabChange={handleTabChange} />
+      </div>
     </div>
   )
 }
