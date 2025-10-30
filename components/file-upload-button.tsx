@@ -17,14 +17,24 @@ interface FileUploadButtonProps {
 export function FileUploadButton({ onFileSelect, onFileRemove, selectedFile, disabled }: FileUploadButtonProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
+    setError(null)
+
     // Check file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      alert("File size must be less than 5MB")
+      setError("File size must be less than 5MB")
+      return
+    }
+
+    // Validate file type
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf", "text/plain"]
+    if (!allowedTypes.includes(file.type)) {
+      setError("File type not supported. Please use JPG, PNG, GIF, WebP, PDF, or TXT")
       return
     }
 
@@ -33,9 +43,11 @@ export function FileUploadButton({ onFileSelect, onFileRemove, selectedFile, dis
     try {
       const result = await convertFileToBase64(file)
       onFileSelect(result)
+      setError(null)
     } catch (error) {
       console.error("[v0] File upload error:", error)
-      alert("Failed to upload file. Please try again.")
+      const errorMessage = error instanceof Error ? error.message : "Failed to upload file"
+      setError(errorMessage)
     } finally {
       setIsUploading(false)
       if (fileInputRef.current) {
@@ -45,11 +57,13 @@ export function FileUploadButton({ onFileSelect, onFileRemove, selectedFile, dis
   }
 
   const handleButtonClick = () => {
+    setError(null)
     fileInputRef.current?.click()
   }
 
   const handleRemove = () => {
     onFileRemove()
+    setError(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -60,7 +74,7 @@ export function FileUploadButton({ onFileSelect, onFileRemove, selectedFile, dis
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*,.gif,.pdf,.doc,.docx,.txt"
+        accept="image/*,.pdf,.txt"
         onChange={handleFileChange}
         className="hidden"
         disabled={disabled || isUploading}
@@ -74,6 +88,7 @@ export function FileUploadButton({ onFileSelect, onFileRemove, selectedFile, dis
           onClick={handleButtonClick}
           disabled={disabled || isUploading}
           className="text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-full"
+          title={error || "Attach file"}
         >
           {isUploading ? (
             <div className="h-5 w-5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
@@ -94,6 +109,7 @@ export function FileUploadButton({ onFileSelect, onFileRemove, selectedFile, dis
           </button>
         </div>
       )}
+      {error && <span className="text-xs text-red-400">{error}</span>}
     </div>
   )
 }
