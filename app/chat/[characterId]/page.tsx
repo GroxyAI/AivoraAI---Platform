@@ -57,32 +57,60 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
   const [isRetrying, setIsRetrying] = useState(false)
   const [selectedFile, setSelectedFile] = useState<FileUploadResult | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isInitializing, setIsInitializing] = useState(true)
 
   useEffect(() => {
-    const characters = getCharacters()
-    const foundCharacter = characters.find((c) => c.id === characterId)
+    const initializeChat = async () => {
+      try {
+        let foundCharacter = getCharacters().find((c) => c.id === characterId)
 
-    if (!foundCharacter) {
-      router.push("/characters")
-      return
+        if (!foundCharacter) {
+          try {
+            const response = await fetch("/api/characters")
+            const data = await response.json()
+            if (response.ok && data.characters) {
+              const globalChar = data.characters.find((c: any) => c.id.toString() === characterId)
+              if (globalChar) {
+                foundCharacter = {
+                  id: globalChar.id.toString(),
+                  name: globalChar.name,
+                  prompt: globalChar.prompt,
+                  avatar: globalChar.avatar_url,
+                }
+              }
+            }
+          } catch (err) {
+            console.error("[v0] Error fetching global character:", err)
+          }
+        }
+
+        if (!foundCharacter) {
+          router.push("/characters")
+          return
+        }
+
+        setCharacter(foundCharacter)
+
+        const savedChat = getCharacterChatSession(characterId)
+        const profile = getUserProfile()
+        const savedFilter = localStorage.getItem("content-filter") !== "false"
+
+        if (savedChat) {
+          setCurrentChat(savedChat)
+        } else {
+          const newChat = createNewCharacterChatSession(characterId)
+          setCurrentChat(newChat)
+          saveCharacterChatSession(newChat)
+        }
+
+        setUserProfile(profile)
+        setContentFilter(savedFilter)
+      } finally {
+        setIsInitializing(false)
+      }
     }
 
-    setCharacter(foundCharacter)
-
-    const savedChat = getCharacterChatSession(characterId)
-    const profile = getUserProfile()
-    const savedFilter = localStorage.getItem("content-filter") !== "false"
-
-    if (savedChat) {
-      setCurrentChat(savedChat)
-    } else {
-      const newChat = createNewCharacterChatSession(characterId)
-      setCurrentChat(newChat)
-      saveCharacterChatSession(newChat)
-    }
-
-    setUserProfile(profile)
-    setContentFilter(savedFilter)
+    initializeChat()
   }, [characterId, router])
 
   const CrisisInfo = () => (
