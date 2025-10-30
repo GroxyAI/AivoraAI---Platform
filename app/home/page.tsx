@@ -1,12 +1,16 @@
 "use client"
 import { Button } from "@/components/ui/button"
-import { Menu, Maximize2, Sparkles, MessageCircle, Users, Settings } from "lucide-react"
+import { Menu, Maximize2, Sparkles, MessageCircle, Users, Settings, MessageSquare } from "lucide-react"
 import { AppLayout } from "@/components/app-layout"
 import Link from "next/link"
 import { useState, useEffect } from "react"
 import { getCharacters, getRecentChats, getUserProfile, type Character, type ChatSession } from "@/lib/storage"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Card, CardContent } from "@/components/ui/card"
+import { useRouter } from "next/navigation"
 
 export default function HomePage() {
+  const router = useRouter()
   const [characters, setCharacters] = useState<Character[]>([])
   const [recentChats, setRecentChats] = useState<ChatSession[]>([])
   const [userProfile, setUserProfile] = useState<any>(null)
@@ -29,6 +33,17 @@ export default function HomePage() {
     else if (hour < 18) timeGreeting = "Good afternoon"
 
     return userProfile?.username ? `${timeGreeting}, ${userProfile.username}!` : `${timeGreeting}!`
+  }
+
+  const getCharacterForChat = (characterId?: string): Character | undefined => {
+    if (!characterId) return undefined
+    return characters.find((c) => c.id === characterId)
+  }
+
+  const handleContinueChat = (chat: ChatSession) => {
+    if (chat.characterId) {
+      router.push(`/chat/${chat.characterId}`)
+    }
   }
 
   return (
@@ -90,6 +105,49 @@ export default function HomePage() {
                 </Button>
               </Link>
             </div>
+
+            {recentChats.length > 0 && (
+              <div className="mb-8">
+                <div className="flex items-center gap-2 mb-4">
+                  <MessageSquare className="h-5 w-5 text-indigo-400" />
+                  <h2 className="text-xl font-semibold text-white">Continue Your Chats</h2>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {recentChats.map((chat) => {
+                    const character = getCharacterForChat(chat.characterId)
+                    return (
+                      <Card
+                        key={chat.id}
+                        className="bg-zinc-800 border-zinc-700 hover:bg-zinc-750 transition-colors cursor-pointer"
+                        onClick={() => handleContinueChat(chat)}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-start gap-3">
+                            {character && (
+                              <Avatar className="h-10 w-10 flex-shrink-0">
+                                <AvatarImage src={character.avatar || "/placeholder.svg"} alt={character.name} />
+                                <AvatarFallback className="bg-indigo-600 text-white text-sm">
+                                  {character.name[0].toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-semibold text-white truncate">
+                                {character?.name || "Unknown Character"}
+                              </h3>
+                              <p className="text-sm text-zinc-400 truncate">{chat.title}</p>
+                              <p className="text-xs text-zinc-500 mt-1">
+                                {new Date(chat.updatedAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </main>
       </div>

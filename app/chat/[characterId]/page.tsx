@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button"
 import type React from "react"
 import { Input } from "@/components/ui/input"
-import { Maximize2, Mic, ArrowUp, AlertTriangle, ArrowLeft } from "lucide-react"
+import { Maximize2, Mic, ArrowUp, AlertTriangle, ArrowLeft, Trash2 } from "lucide-react"
 import { useState, useEffect, use } from "react"
 import { AppLayout } from "@/components/app-layout"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -16,6 +16,8 @@ import {
   awardChatTokens,
   getPreferredModel,
   deductTokens,
+  getChatSessions,
+  saveChatSessions,
   type ChatSession,
   type Message,
   type Character,
@@ -54,6 +56,7 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
   const [error, setError] = useState<string | null>(null)
   const [isRetrying, setIsRetrying] = useState(false)
   const [selectedFile, setSelectedFile] = useState<FileUploadResult | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   useEffect(() => {
     const characters = getCharacters()
@@ -163,6 +166,23 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
     setCurrentChat(newChat)
     saveCharacterChatSession(newChat)
     setError(null)
+  }
+
+  const deleteCurrentSession = () => {
+    if (!currentChat) return
+
+    const sessions = getChatSessions()
+    const filteredSessions = sessions.filter((s) => s.id !== currentChat.id)
+    saveChatSessions(filteredSessions)
+
+    localStorage.removeItem(`character-chat-${characterId}`)
+
+    setShowDeleteConfirm(false)
+    setCurrentChat(null)
+
+    const newChat = createNewCharacterChatSession(characterId)
+    setCurrentChat(newChat)
+    saveCharacterChatSession(newChat)
   }
 
   const retryLastMessage = async () => {
@@ -484,11 +504,43 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
             <Button variant="ghost" size="sm" className="text-white hover:bg-zinc-800 text-sm" onClick={startNewChat}>
               New Chat
             </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-white hover:bg-zinc-800"
+              onClick={() => setShowDeleteConfirm(true)}
+              title="Delete this chat session"
+            >
+              <Trash2 className="h-5 w-5" />
+            </Button>
             <Button variant="ghost" size="icon" className="text-white hover:bg-zinc-800">
               <Maximize2 className="h-6 w-6" />
             </Button>
           </div>
         </header>
+
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-zinc-800 border border-zinc-700 rounded-lg p-6 max-w-sm mx-4">
+              <h3 className="text-lg font-semibold text-white mb-2">Delete Chat Session?</h3>
+              <p className="text-zinc-400 mb-6">
+                This will permanently delete this chat session. You can start a new chat with {character.name} anytime.
+              </p>
+              <div className="flex gap-3">
+                <Button onClick={deleteCurrentSession} className="bg-red-600 hover:bg-red-700 flex-1">
+                  Delete
+                </Button>
+                <Button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  variant="outline"
+                  className="border-zinc-600 text-zinc-300 hover:bg-zinc-700 flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Error Banner */}
         {error && (
