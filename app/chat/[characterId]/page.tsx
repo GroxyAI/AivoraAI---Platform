@@ -543,7 +543,7 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
               <h1 className="font-semibold">{character.name}</h1>
               {character.creator_username && (
                 <button
-                  onClick={() => handleUsernameClick(character.creator_username)}
+                  onClick={() => handleUsernameClick(character.creator_username!)}
                   className="text-xs text-zinc-400 hover:text-indigo-400 transition-colors cursor-pointer"
                 >
                   by {character.creator_username}
