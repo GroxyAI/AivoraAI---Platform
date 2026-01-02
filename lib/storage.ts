@@ -18,6 +18,7 @@ export interface Character {
   name: string
   prompt: string
   avatar: string
+  creator_username?: string // Added creator_username field for user profile feature
 }
 
 export interface Message {
