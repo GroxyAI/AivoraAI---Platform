@@ -1,11 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
+import type { RouteContext } from "next/dist/server/route-modules/app-route/module"
 
 const sql = neon(process.env.DATABASE_URL!)
 
-export async function GET(request: NextRequest, { params }: { params: { username: string } }) {
+export async function GET(request: NextRequest, context: RouteContext<"/api/users/[username]">) {
   try {
-    const { username } = params
+    const { username } = await context.params
 
     // Fetch user profile
     const userResult = await sql`
