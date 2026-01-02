@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button"
 import type React from "react"
 import { Input } from "@/components/ui/input"
 import { Maximize2, Mic, ArrowUp, AlertTriangle, ArrowLeft, Trash2 } from "lucide-react"
-import { useState, useEffect, use } from "react"
+import { useState, useEffect } from "react"
 import { AppLayout } from "@/components/app-layout"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useRouter } from "next/navigation"
@@ -27,11 +27,12 @@ import { formatText } from "@/lib/text-formatter"
 import { FileUploadButton } from "@/components/file-upload-button"
 import { MessageAttachment } from "@/components/message-attachment"
 import type { FileUploadResult } from "@/lib/file-upload"
+import { UserProfileDrawer } from "@/components/user-profile-drawer"
 
 interface CharacterChatPageProps {
-  params: Promise<{
+  params: {
     characterId: string
-  }>
+  }
 }
 
 interface ExtendedMessage extends Message {
@@ -44,7 +45,7 @@ interface ExtendedMessage extends Message {
 }
 
 export default function CharacterChatPage({ params }: CharacterChatPageProps) {
-  const { characterId } = use(params)
+  const { characterId } = params
 
   const router = useRouter()
   const [currentChat, setCurrentChat] = useState<ChatSession | null>(null)
@@ -59,6 +60,8 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isInitializing, setIsInitializing] = useState(true)
   const [characterNotFound, setCharacterNotFound] = useState(false)
+  const [selectedUsername, setSelectedUsername] = useState<string | null>(null)
+  const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false)
 
   useEffect(() => {
     const initializeChat = async () => {
@@ -77,6 +80,7 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
                   name: globalChar.name,
                   prompt: globalChar.prompt,
                   avatar: globalChar.avatar_url,
+                  creator_username: globalChar.creator_username,
                 }
               }
             }
@@ -497,6 +501,11 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
     setInput(e.target.value)
   }
 
+  const handleUsernameClick = (username: string) => {
+    setSelectedUsername(username)
+    setIsProfileDrawerOpen(true)
+  }
+
   const messages = currentChat?.messages || []
 
   const getGreetingMessage = () => {
@@ -532,6 +541,14 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
             </Avatar>
             <div>
               <h1 className="font-semibold">{character.name}</h1>
+              {character.creator_username && (
+                <button
+                  onClick={() => handleUsernameClick(character.creator_username)}
+                  className="text-xs text-zinc-400 hover:text-indigo-400 transition-colors cursor-pointer"
+                >
+                  by {character.creator_username}
+                </button>
+              )}
             </div>
           </div>
 
@@ -777,6 +794,12 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
             </form>
           </div>
         </div>
+        {/* User Profile Drawer */}
+        <UserProfileDrawer
+          username={selectedUsername}
+          isOpen={isProfileDrawerOpen}
+          onClose={() => setIsProfileDrawerOpen(false)}
+        />
       </div>
     </AppLayout>
   )

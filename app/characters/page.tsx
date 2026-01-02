@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Plus, User, MessageCircle, Heart, Star, Search, TrendingUp } from "lucide-react"
 import { AppLayout } from "@/components/app-layout"
 import { useRouter } from "next/navigation"
+import { UserProfileDrawer } from "@/components/user-profile-drawer"
 
 interface GlobalCharacter {
   id: number
@@ -28,6 +29,8 @@ export default function CharactersPage() {
   const [isCreating, setIsCreating] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [sortBy, setSortBy] = useState<"popular" | "recent">("popular")
+  const [selectedUsername, setSelectedUsername] = useState<string | null>(null)
+  const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
     prompt: "",
@@ -124,6 +127,11 @@ export default function CharactersPage() {
     setFormData({ name: "", prompt: "", avatar_url: "", is_global: true })
     setIsCreating(false)
     setError(null)
+  }
+
+  const handleUsernameClick = (username: string) => {
+    setSelectedUsername(username)
+    setIsProfileDrawerOpen(true)
   }
 
   const filteredCharacters = globalCharacters
@@ -296,7 +304,12 @@ export default function CharactersPage() {
 
                       <div className="flex-1 min-w-0">
                         <h3 className="font-semibold text-white truncate">{character.name}</h3>
-                        <p className="text-xs text-zinc-400">by {character.creator_username}</p>
+                        <button
+                          onClick={() => handleUsernameClick(character.creator_username)}
+                          className="text-xs text-zinc-400 hover:text-indigo-400 transition-colors cursor-pointer"
+                        >
+                          by {character.creator_username}
+                        </button>
                       </div>
                     </div>
 
@@ -363,6 +376,13 @@ export default function CharactersPage() {
           )}
         </div>
       </div>
+
+      {/* UserProfileDrawer component */}
+      <UserProfileDrawer
+        username={selectedUsername}
+        isOpen={isProfileDrawerOpen}
+        onClose={() => setIsProfileDrawerOpen(false)}
+      />
     </AppLayout>
   )
 }
