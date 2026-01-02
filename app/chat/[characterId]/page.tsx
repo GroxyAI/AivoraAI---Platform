@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button"
 import type React from "react"
 import { Input } from "@/components/ui/input"
 import { Maximize2, Mic, ArrowUp, AlertTriangle, ArrowLeft, Trash2 } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, use } from "react"
 import { AppLayout } from "@/components/app-layout"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useRouter } from "next/navigation"
@@ -30,9 +30,9 @@ import type { FileUploadResult } from "@/lib/file-upload"
 import { UserProfileDrawer } from "@/components/user-profile-drawer"
 
 interface CharacterChatPageProps {
-  params: {
+  params: Promise<{
     characterId: string
-  }
+  }>
 }
 
 interface ExtendedMessage extends Message {
@@ -45,7 +45,7 @@ interface ExtendedMessage extends Message {
 }
 
 export default function CharacterChatPage({ params }: CharacterChatPageProps) {
-  const { characterId } = params
+  const { characterId } = use(params)
 
   const router = useRouter()
   const [currentChat, setCurrentChat] = useState<ChatSession | null>(null)
