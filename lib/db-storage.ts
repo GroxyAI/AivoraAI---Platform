@@ -123,7 +123,7 @@ export async function getChatMessages(sessionId: number): Promise<Message[]> {
 
     return (result as DbMessageRow[]).map((row) => ({
       id: row.id.toString(),
-      role: row.role,
+      role: row.role as "user" | "assistant" | "system",
       content: row.content,
       timestamp: new Date(row.created_at).getTime(),
     }))
