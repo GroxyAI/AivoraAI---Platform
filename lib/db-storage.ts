@@ -1,21 +1,45 @@
 import { sql } from "./db"
 import type { Character, ChatSession, Message } from "./storage"
 
+type DbCharacterRow = {
+  id: number
+  name: string
+  prompt: string
+  avatar_url: string
+  creator_username: string | null
+  is_public: boolean
+  is_global: boolean
+}
+
+type DbSessionRow = {
+  id: number
+  title: string
+  created_at: Date
+  updated_at: Date
+}
+
+type DbMessageRow = {
+  id: number
+  role: string
+  content: string
+  created_at: Date
+}
+
 // Character Management
 export async function getUserCharacters(userId: number): Promise<Character[]> {
   try {
     const result = await sql`
-      SELECT id, name, prompt, avatar_url as avatar, creator_username, is_public, is_global
+      SELECT id, name, prompt, avatar_url, creator_username, is_public, is_global
       FROM characters
       WHERE user_id = ${userId}
       ORDER BY created_at DESC
     `
-    return result.map((row: any) => ({
+    return (result as DbCharacterRow[]).map((row) => ({
       id: row.id.toString(),
       name: row.name,
       prompt: row.prompt,
       avatar: row.avatar_url,
-      creator_username: row.creator_username,
+      creator_username: row.creator_username || undefined,
     }))
   } catch (error) {
     console.error("[v0] Error fetching user characters:", error)
@@ -28,17 +52,17 @@ export async function saveCharacter(userId: number, character: Omit<Character, "
     const result = await sql`
       INSERT INTO characters (user_id, name, prompt, avatar_url, creator_username, is_public, created_at, updated_at)
       VALUES (${userId}, ${character.name}, ${character.prompt}, ${character.avatar}, ${character.creator_username || null}, false, NOW(), NOW())
-      RETURNING id, name, prompt, avatar_url as avatar, creator_username
+      RETURNING id, name, prompt, avatar_url, creator_username
     `
     if (result.length === 0) return null
 
-    const row = result[0]
+    const row = result[0] as DbCharacterRow
     return {
       id: row.id.toString(),
       name: row.name,
       prompt: row.prompt,
-      avatar: row.avatar,
-      creator_username: row.creator_username,
+      avatar: row.avatar_url,
+      creator_username: row.creator_username || undefined,
     }
   } catch (error) {
     console.error("[v0] Error saving character:", error)
@@ -70,7 +94,7 @@ export async function getUserChatSessions(userId: number): Promise<ChatSession[]
     `
 
     const sessions: ChatSession[] = []
-    for (const row of result) {
+    for (const row of result as DbSessionRow[]) {
       const messages = await getChatMessages(row.id)
       sessions.push({
         id: row.id.toString(),
@@ -97,7 +121,7 @@ export async function getChatMessages(sessionId: number): Promise<Message[]> {
       ORDER BY created_at ASC
     `
 
-    return result.map((row: any) => ({
+    return (result as DbMessageRow[]).map((row) => ({
       id: row.id.toString(),
       role: row.role,
       content: row.content,
@@ -111,9 +135,11 @@ export async function getChatMessages(sessionId: number): Promise<Message[]> {
 
 export async function saveChatSession(userId: number, session: ChatSession): Promise<boolean> {
   try {
+    const sessionIdNum = Number.parseInt(session.id)
+
     // Check if session exists
     const existing = await sql`
-      SELECT id FROM chat_sessions WHERE id = ${Number.parseInt(session.id)} AND user_id = ${userId}
+      SELECT id FROM chat_sessions WHERE id = ${sessionIdNum} AND user_id = ${userId}
     `
 
     if (existing.length === 0) {
@@ -125,7 +151,7 @@ export async function saveChatSession(userId: number, session: ChatSession): Pro
       `
 
       if (newSession.length === 0) return false
-      const sessionId = newSession[0].id
+      const sessionId = (newSession[0] as { id: number }).id
 
       // Save messages
       for (const message of session.messages) {
@@ -139,18 +165,18 @@ export async function saveChatSession(userId: number, session: ChatSession): Pro
       await sql`
         UPDATE chat_sessions
         SET title = ${session.title}, updated_at = NOW()
-        WHERE id = ${Number.parseInt(session.id)} AND user_id = ${userId}
+        WHERE id = ${sessionIdNum} AND user_id = ${userId}
       `
 
       // Delete old messages and insert new ones
       await sql`
-        DELETE FROM messages WHERE chat_session_id = ${Number.parseInt(session.id)}
+        DELETE FROM messages WHERE chat_session_id = ${sessionIdNum}
       `
 
       for (const message of session.messages) {
         await sql`
           INSERT INTO messages (chat_session_id, role, content, created_at)
-          VALUES (${Number.parseInt(session.id)}, ${message.role}, ${message.content}, NOW())
+          VALUES (${sessionIdNum}, ${message.role}, ${message.content}, NOW())
         `
       }
     }
