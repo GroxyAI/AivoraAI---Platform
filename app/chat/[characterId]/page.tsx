@@ -575,7 +575,9 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
                     {character.name[0].toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <h1 className="text-4xl md:text-5xl font-medium text-white mb-8">{getGreetingMessage()}</h1>
+                <h1 className="text-4xl md:text-5xl font-medium text-white mb-8">
+                  {getGreetingMessage(userProfile, character)}
+                </h1>
                 <div className="text-zinc-400 text-sm space-y-1">
                   <p>Try these commands:</p>
                   <p>
