@@ -13,9 +13,6 @@ import {
   createNewCharacterChatSession,
   getUserProfile,
   getCharacters,
-  awardChatTokens,
-  getPreferredModel,
-  deductTokens,
   getChatSessions,
   saveChatSessions,
   type ChatSession,
@@ -232,172 +229,104 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
     saveCharacterChatSession(newChat)
   }
 
-  const retryLastMessage = async () => {
-    if (!chatSession || !character || messages.length === 0) return
+  const handleRetry = async () => {
+    if (!chatSession?.id) return
 
-    const lastUserMessage = [...messages].reverse().find((m) => m.role === "user")
+    const lastUserMessage = messages.findLast((m) => m.role === "user")
     if (!lastUserMessage) return
 
     setIsRetrying(true)
     setError(null)
 
-    const messagesUpToLastUser = messages.slice(0, messages.lastIndexOf(lastUserMessage) + 1)
-
-    const chatForRetry = {
-      ...chatSession,
-      messages: messagesUpToLastUser,
-    }
-
-    setMessages(messagesUpToLastUser)
-
-    await sendMessageToAPI(chatForRetry, lastUserMessage.content)
-    setIsRetrying(false)
-  }
-
-  const sendMessageToAPI = async (chat: ChatSession, messageContent: string) => {
-    if (!character) return
+    const filteredMessages = messages.filter((m) => m.id !== lastUserMessage.id)
 
     try {
-      setError(null)
+      setMessages(filteredMessages)
 
-      const selectedModel = getPreferredModel()
-      const modelCosts = { basic: 0, advanced: 5, premium: 10 }
-      const cost = modelCosts[selectedModel]
+      const messageToRetry = lastUserMessage.content
+      await handleSendMessage(messageToRetry, filteredMessages)
+    } catch (error) {
+      console.error("[v0] Retry failed:", error)
+      setError("Retry failed. Please try again.")
+    } finally {
+      setIsRetrying(false)
+    }
+  }
 
-      if (cost > 0 && !deductTokens(cost)) {
-        throw new Error(`Insufficient tokens. You need ${cost} tokens to use the ${selectedModel} model.`)
-      }
+  const handleSendMessage = async (messageContent: string, currentMessages: Message[]) => {
+    if (!character || !chatSession?.id) return
 
-      const contextMessages = []
-      contextMessages.push({
-        role: "system" as const,
-        content: character.prompt,
-      })
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: messageContent,
+      timestamp: Date.now(),
+    }
 
-      if (userProfile?.username || userProfile?.bio) {
-        contextMessages.push({
-          role: "system" as const,
-          content: `User context: ${userProfile.username ? `Name: ${userProfile.username}. ` : ""}${userProfile.bio ? `Bio: ${userProfile.bio}` : ""}`,
-        })
-      }
+    const updatedMessages = [...currentMessages, userMessage]
+    setMessages(updatedMessages)
+    setIsLoading(true)
+    setError(null)
 
+    try {
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: [
-            ...contextMessages,
-            ...chat.messages.map((m) => ({
-              role: m.role,
-              content: m.content,
-            })),
-          ],
-          model: selectedModel,
+          messages: updatedMessages,
+          characterId: character.id,
+          systemPrompt: character.prompt,
         }),
       })
 
       if (!response.ok) {
-        if (response.status === 429) {
-          throw new Error("Too many requests. Please wait a moment and try again.")
-        } else if (response.status === 500) {
-          throw new Error("Server error. Please try again in a few moments.")
-        } else if (response.status === 401) {
-          throw new Error("Authentication error. Please refresh the page.")
-        } else {
-          throw new Error(`Request failed with status ${response.status}. Please try again.`)
-        }
+        throw new Error("Failed to get response")
       }
 
-      const reader = response.body?.getReader()
-      if (!reader) throw new Error("Unable to read response. Please check your connection and try again.")
+      const data = await response.json()
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: "",
+        content: data.message,
         timestamp: Date.now(),
       }
 
-      const chatWithAssistant = {
-        ...chat,
-        messages: [...chat.messages, assistantMessage],
+      const finalMessages = [...updatedMessages, assistantMessage]
+      setMessages(finalMessages)
+
+      const updatedChat: ChatSession = {
+        id: chatSession.id,
+        title: chatSession.title,
+        messages: finalMessages,
+        characterId: character.id,
+        createdAt: chatSession.createdAt,
         updatedAt: Date.now(),
       }
 
-      setMessages([...messages, assistantMessage])
-
-      const decoder = new TextDecoder()
-      let done = false
-      let hasReceivedContent = false
-      let modelFallbackShown = false
-
-      while (!done) {
-        const { value, done: readerDone } = await reader.read()
-        done = readerDone
-
-        if (value) {
-          const chunk = decoder.decode(value, { stream: true })
-          const lines = chunk.split("\n")
-
-          for (const line of lines) {
-            if (line.startsWith("0:")) {
-              try {
-                const data = JSON.parse(line.slice(2))
-                if (data.type === "model-fallback" && !modelFallbackShown) {
-                  modelFallbackShown = true
-                  setError(
-                    `Switched to ${data.usedModel} model due to rate limits on ${data.originalModel}. Your chat continues normally.`,
-                  )
-                  setTimeout(() => {
-                    setError(null)
-                  }, 5000)
-                }
-                if (data.type === "text-delta" && data.textDelta) {
-                  hasReceivedContent = true
-                  setMessages((prev) => {
-                    const updatedMessages = prev.map((msg) =>
-                      msg.id === assistantMessage.id ? { ...msg, content: msg.content + data.textDelta } : msg,
-                    )
-                    const updatedChat = { ...chat, messages: updatedMessages, updatedAt: Date.now() }
-                    saveCharacterChatSession(updatedChat)
-                    return updatedMessages
-                  })
-                }
-              } catch (e) {
-                console.error("[v0] Error parsing streaming chunk:", e)
-              }
-            }
-          }
-        }
-      }
-
-      if (!hasReceivedContent) {
-        throw new Error("No response received from the AI. Please try again.")
-      }
-
-      awardChatTokens()
+      setChatSession(updatedChat)
+      saveCharacterChatSession(updatedChat)
     } catch (error) {
-      console.error("[v0] Chat API error:", error)
-
-      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred. Please try again."
-      setError(errorMessage)
+      console.error("[v0] Error sending message:", error)
+      setError("Failed to send message. Please try again.")
 
       const errorResponse: Message = {
-        id: (Date.now() + 1).toString(),
+        id: Date.now().toString(),
         role: "assistant",
         content: "I'm having trouble responding right now. Please try again or start a new chat.",
         timestamp: Date.now(),
       }
 
-      const chatWithError = {
-        ...chatSession,
-        messages: [...messages, errorResponse],
+      const chatWithError: ChatSession = {
+        id: chatSession.id,
+        title: chatSession.title,
+        messages: [...updatedMessages, errorResponse],
+        characterId: chatSession.characterId,
+        createdAt: chatSession.createdAt,
         updatedAt: Date.now(),
       }
 
-      setMessages([...messages, errorResponse])
+      setMessages([...updatedMessages, errorResponse])
       saveCharacterChatSession(chatWithError)
     }
   }
@@ -500,7 +429,7 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
       ? `${trimmedInput}\n\n[User attached an image/file: ${selectedFile.fileName}. Base64 data: ${selectedFile.base64Data.substring(0, 100)}...]`
       : trimmedInput
 
-    await sendMessageToAPI(updatedChat, messageContent)
+    await handleSendMessage(messageContent, messages)
     setIsLoading(false)
   }
 
@@ -613,7 +542,7 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
                   variant="ghost"
                   size="sm"
                   className="text-red-400 hover:text-red-300 hover:bg-red-900/30 text-xs"
-                  onClick={retryLastMessage}
+                  onClick={handleRetry}
                   disabled={isRetrying}
                 >
                   {isRetrying ? "Retrying..." : "Retry"}
