@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button"
 import type React from "react"
 import { Input } from "@/components/ui/input"
 import { Maximize2, Mic, ArrowUp, AlertTriangle, ArrowLeft, Trash2 } from "lucide-react"
-import { useState, useEffect, use } from "react"
+import { useState, useEffect, use, useRef } from "react"
 import { AppLayout } from "@/components/app-layout"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useRouter } from "next/navigation"
@@ -46,21 +46,22 @@ interface ExtendedMessage extends Message {
 
 export default function CharacterChatPage({ params }: CharacterChatPageProps) {
   const { characterId } = use(params)
-
   const router = useRouter()
-  const [currentChat, setCurrentChat] = useState<ChatSession | null>(null)
   const [character, setCharacter] = useState<Character | null>(null)
+  const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<FileUploadResult | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [selectedUsername, setSelectedUsername] = useState<string | null>(null)
+  const [chatSession, setChatSession] = useState<ChatSession | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [characterNotFound, setCharacterNotFound] = useState(false)
   const [userProfile, setUserProfile] = useState<any>(null)
   const [contentFilter, setContentFilter] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isRetrying, setIsRetrying] = useState(false)
-  const [selectedFile, setSelectedFile] = useState<FileUploadResult | null>(null)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isInitializing, setIsInitializing] = useState(true)
-  const [characterNotFound, setCharacterNotFound] = useState(false)
-  const [selectedUsername, setSelectedUsername] = useState<string | null>(null)
   const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false)
 
   useEffect(() => {
@@ -101,10 +102,11 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
         const savedFilter = localStorage.getItem("content-filter") !== "false"
 
         if (savedChat) {
-          setCurrentChat(savedChat)
+          setChatSession(savedChat)
+          setMessages(savedChat.messages)
         } else {
           const newChat = createNewCharacterChatSession(characterId)
-          setCurrentChat(newChat)
+          setChatSession(newChat)
           saveCharacterChatSession(newChat)
         }
 
@@ -123,6 +125,10 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
       router.push("/characters")
     }
   }, [characterNotFound, isInitializing, router])
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
 
   const CrisisInfo = () => (
     <div className="bg-red-900/20 border border-red-500 rounded-lg p-4 mb-4">
@@ -202,45 +208,47 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
     if (!character) return
 
     const newChat = createNewCharacterChatSession(characterId)
-    setCurrentChat(newChat)
+    setChatSession(newChat)
     saveCharacterChatSession(newChat)
     setError(null)
+    setMessages([])
   }
 
   const deleteCurrentSession = () => {
-    if (!currentChat) return
+    if (!chatSession) return
 
     const sessions = getChatSessions()
-    const filteredSessions = sessions.filter((s) => s.id !== currentChat.id)
+    const filteredSessions = sessions.filter((s) => s.id !== chatSession.id)
     saveChatSessions(filteredSessions)
 
     localStorage.removeItem(`character-chat-${characterId}`)
 
     setShowDeleteConfirm(false)
-    setCurrentChat(null)
+    setChatSession(null)
+    setMessages([])
 
     const newChat = createNewCharacterChatSession(characterId)
-    setCurrentChat(newChat)
+    setChatSession(newChat)
     saveCharacterChatSession(newChat)
   }
 
   const retryLastMessage = async () => {
-    if (!currentChat || !character || currentChat.messages.length === 0) return
+    if (!chatSession || !character || messages.length === 0) return
 
-    const lastUserMessage = [...currentChat.messages].reverse().find((m) => m.role === "user")
+    const lastUserMessage = [...messages].reverse().find((m) => m.role === "user")
     if (!lastUserMessage) return
 
     setIsRetrying(true)
     setError(null)
 
-    const messagesUpToLastUser = currentChat.messages.slice(0, currentChat.messages.lastIndexOf(lastUserMessage) + 1)
+    const messagesUpToLastUser = messages.slice(0, messages.lastIndexOf(lastUserMessage) + 1)
 
     const chatForRetry = {
-      ...currentChat,
+      ...chatSession,
       messages: messagesUpToLastUser,
     }
 
-    setCurrentChat(chatForRetry)
+    setMessages(messagesUpToLastUser)
 
     await sendMessageToAPI(chatForRetry, lastUserMessage.content)
     setIsRetrying(false)
@@ -318,7 +326,7 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
         updatedAt: Date.now(),
       }
 
-      setCurrentChat(chatWithAssistant)
+      setMessages([...messages, assistantMessage])
 
       const decoder = new TextDecoder()
       let done = false
@@ -348,14 +356,13 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
                 }
                 if (data.type === "text-delta" && data.textDelta) {
                   hasReceivedContent = true
-                  setCurrentChat((prev) => {
-                    if (!prev) return prev
-                    const updatedMessages = prev.messages.map((msg) =>
+                  setMessages((prev) => {
+                    const updatedMessages = prev.map((msg) =>
                       msg.id === assistantMessage.id ? { ...msg, content: msg.content + data.textDelta } : msg,
                     )
-                    const updated = { ...prev, messages: updatedMessages, updatedAt: Date.now() }
-                    saveCharacterChatSession(updated)
-                    return updated
+                    const updatedChat = { ...chat, messages: updatedMessages, updatedAt: Date.now() }
+                    saveCharacterChatSession(updatedChat)
+                    return updatedMessages
                   })
                 }
               } catch (e) {
@@ -385,19 +392,19 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
       }
 
       const chatWithError = {
-        ...chat,
-        messages: [...chat.messages, errorResponse],
+        ...chatSession,
+        messages: [...messages, errorResponse],
         updatedAt: Date.now(),
       }
 
-      setCurrentChat(chatWithError)
+      setMessages([...messages, errorResponse])
       saveCharacterChatSession(chatWithError)
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if ((!input.trim() && !selectedFile) || isLoading || !currentChat || !character) return
+    if ((!input.trim() && !selectedFile) || isLoading || !chatSession || !character) return
 
     const trimmedInput = input.trim()
 
@@ -410,12 +417,12 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
       }
 
       const updatedChat = {
-        ...currentChat,
-        messages: [...currentChat.messages, commandMessage],
+        ...chatSession,
+        messages: [...messages, commandMessage],
         updatedAt: Date.now(),
       }
 
-      setCurrentChat(updatedChat)
+      setMessages([...messages, commandMessage])
       saveCharacterChatSession(updatedChat)
       setInput("")
       return
@@ -430,12 +437,12 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
       }
 
       const updatedChat = {
-        ...currentChat,
-        messages: [...currentChat.messages, commandMessage],
+        ...chatSession,
+        messages: [...messages, commandMessage],
         updatedAt: Date.now(),
       }
 
-      setCurrentChat(updatedChat)
+      setMessages([...messages, commandMessage])
       saveCharacterChatSession(updatedChat)
       setInput("")
       return
@@ -451,12 +458,12 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
       }
 
       const updatedChat = {
-        ...currentChat,
-        messages: [...currentChat.messages, crisisMessage],
+        ...chatSession,
+        messages: [...messages, crisisMessage],
         updatedAt: Date.now(),
       }
 
-      setCurrentChat(updatedChat)
+      setMessages([...messages, crisisMessage])
       saveCharacterChatSession(updatedChat)
       setInput("")
       return
@@ -478,13 +485,13 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
     }
 
     const updatedChat = {
-      ...currentChat,
-      messages: [...currentChat.messages, userMessage],
+      ...chatSession,
+      messages: [...messages, userMessage],
       updatedAt: Date.now(),
-      title: currentChat.messages.length === 0 ? trimmedInput.slice(0, 50) : currentChat.title,
+      title: messages.length === 0 ? trimmedInput.slice(0, 50) : chatSession.title,
     }
 
-    setCurrentChat(updatedChat)
+    setMessages([...messages, userMessage])
     setInput("")
     setSelectedFile(null)
     setIsLoading(true)
@@ -506,24 +513,15 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
     setIsProfileDrawerOpen(true)
   }
 
-  const messages = currentChat?.messages || []
-
-  const getGreetingMessage = () => {
-    if (!character) return "Loading..."
-    return userProfile?.username
-      ? `Hello ${userProfile.username}! I'm ${character.name}. How can I help you today?`
-      : `Hello! I'm ${character.name}. How can I help you today?`
-  }
-
   if (!character) {
     return <div>Loading...</div>
   }
 
   return (
     <AppLayout>
-      <div className="min-h-screen bg-zinc-900 text-white flex flex-col pb-16">
+      <div className="h-full bg-zinc-900 text-white flex flex-col">
         {/* Header */}
-        <header className="flex items-center justify-between p-4">
+        <header className="flex-shrink-0 flex items-center justify-between p-4 border-b border-zinc-800">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -638,7 +636,7 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
         )}
 
         {/* Main Chat Area */}
-        <main className="flex-1 flex flex-col px-4">
+        <main className="flex-1 flex flex-col min-h-0 px-4">
           {messages.length === 0 ? (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
@@ -751,48 +749,47 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
                   </div>
                 </div>
               )}
+              <div ref={messagesEndRef} />
             </div>
           )}
         </main>
 
         {/* Input Area */}
-        <div className="p-4 pb-8">
-          <div className="max-w-3xl mx-auto relative">
-            <form onSubmit={handleSubmit} className="flex items-center bg-zinc-800 rounded-full px-4 py-3 gap-3">
-              <FileUploadButton
-                onFileSelect={setSelectedFile}
-                onFileRemove={() => setSelectedFile(null)}
-                selectedFile={selectedFile}
-                disabled={isLoading}
-              />
+        <div className="flex-shrink-0 pb-4 pt-2 max-w-3xl mx-auto w-full">
+          <form onSubmit={handleSubmit} className="flex items-center bg-zinc-800 rounded-full px-4 py-3 gap-3">
+            <FileUploadButton
+              onFileSelect={setSelectedFile}
+              onFileRemove={() => setSelectedFile(null)}
+              selectedFile={selectedFile}
+              disabled={isLoading}
+            />
 
-              <Input
-                value={input}
-                onChange={handleInputChange}
-                placeholder={`Chat with ${character.name}...`}
-                disabled={isLoading}
-                className="flex-1 bg-transparent border-none text-white placeholder:text-zinc-400 focus-visible:ring-0 focus-visible:ring-offset-0"
-              />
+            <Input
+              value={input}
+              onChange={handleInputChange}
+              placeholder={`Chat with ${character.name}...`}
+              disabled={isLoading}
+              className="flex-1 bg-transparent border-none text-white placeholder:text-zinc-400 focus-visible:ring-0 focus-visible:ring-offset-0"
+            />
 
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-full"
-              >
-                <Mic className="h-5 w-5" />
-              </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-full"
+            >
+              <Mic className="h-5 w-5" />
+            </Button>
 
-              <Button
-                type="submit"
-                disabled={(!input.trim() && !selectedFile) || isLoading}
-                size="icon"
-                className="bg-zinc-600 hover:bg-zinc-500 disabled:bg-zinc-700 disabled:text-zinc-500 rounded-full"
-              >
-                <ArrowUp className="h-5 w-5" />
-              </Button>
-            </form>
-          </div>
+            <Button
+              type="submit"
+              disabled={(!input.trim() && !selectedFile) || isLoading}
+              size="icon"
+              className="bg-zinc-600 hover:bg-zinc-500 disabled:bg-zinc-700 disabled:text-zinc-500 rounded-full"
+            >
+              <ArrowUp className="h-5 w-5" />
+            </Button>
+          </form>
         </div>
         {/* User Profile Drawer */}
         <UserProfileDrawer
@@ -803,4 +800,10 @@ export default function CharacterChatPage({ params }: CharacterChatPageProps) {
       </div>
     </AppLayout>
   )
+}
+
+function getGreetingMessage(userProfile: any, character: Character): string {
+  return userProfile?.username
+    ? `Hello ${userProfile.username}! I'm ${character.name}. How can I help you today?`
+    : `Hello! I'm ${character.name}. How can I help you today?`
 }

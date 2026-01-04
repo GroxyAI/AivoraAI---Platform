@@ -357,3 +357,46 @@ export const setDevAccount = (isDev: boolean): void => {
 export const getDefaultProfilePicture = (): string => {
   return "/aivora-mascot.png" // Updated to use local AivoraAI mascot as default profile picture
 }
+
+// Authentication and Sync Management
+export const isUserLoggedIn = async (): Promise<boolean> => {
+  if (typeof window === "undefined") return false
+
+  try {
+    const response = await fetch("/api/auth/me")
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
+export const syncToDatabase = async (): Promise<void> => {
+  if (typeof window === "undefined") return
+
+  try {
+    const loggedIn = await isUserLoggedIn()
+    if (!loggedIn) return
+
+    // Sync characters
+    const characters = getCharacters()
+    if (characters.length > 0) {
+      await fetch("/api/characters/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ characters }),
+      })
+    }
+
+    // Sync chat sessions
+    const sessions = getChatSessions()
+    if (sessions.length > 0) {
+      await fetch("/api/chat-sessions/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessions }),
+      })
+    }
+  } catch (error) {
+    console.error("[v0] Error syncing to database:", error)
+  }
+}
